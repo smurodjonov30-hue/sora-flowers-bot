@@ -67,7 +67,7 @@ START_TEXT = (
     "🎁 Sovg‘a uchun ajoyib tanlov\\n"
     "🚚 Yetkazib berish xizmati mavjud\\n\\n"
     "📍 <b>Manzil:</b> Toshkent shahri, Chorsu bozori\\n\\n"
-    "📞 <b>Aloqa:</b> +998 94 628 20 04\\n\\n"
+    "📞 <b>Aloqa:</b> <a href=\"tel:+998946282004\">+998 94 628 20 04</a>\\n\\n"
     "🛍 Katalogimizni ko‘ring, o‘zingizga yoqqan gulni tanlang va buyurtma bering!\\n\\n"
     "<b>SORA FLOWERS — Tabiat go‘zalligi sizning uyingizda!</b>"
 )
@@ -119,8 +119,7 @@ async def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str = 
     text_in = message.get('text','').strip()
     if text_in.startswith('/start'):
         chat_id = message['chat']['id']
-        keyboard = {'inline_keyboard': [[{'text':'🛍 Katalogni ko‘rish','web_app':{'url':WEBAPP_URL}}],
-            [{'text':'📞 Biz bilan bog‘lanish','url':'https://wa.me/998946282004'}]]}
+        keyboard = {'inline_keyboard': [[{'text':'🛍 Katalogni ko‘rish','web_app':{'url':WEBAPP_URL}}]]}
         await telegram_call('sendMessage', {'chat_id':chat_id,'text':START_TEXT,'parse_mode':'HTML','reply_markup':keyboard})
     return {'ok': True}
 
