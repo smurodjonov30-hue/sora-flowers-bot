@@ -1,4 +1,4 @@
-import os, json, hmac, hashlib, time, sqlite3
+import os, json, hmac, hashlib, time, sqlite3, base64
 from urllib.parse import parse_qsl
 from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException
@@ -31,6 +31,7 @@ class Order(BaseModel):
     payment_method:str='cash'
     items:list[Item]
     total:int=Field(ge=0)
+    proof_image:str=''
 
 def init_db():
     with sqlite3.connect(DB) as c:
@@ -53,8 +54,17 @@ def verify_init_data(raw:str):
 
 async def notify_admin(text):
     if not BOT_TOKEN or not ADMIN_CHAT_ID: return
-    async with httpx.AsyncClient(timeout=12) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         await client.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',json={'chat_id':ADMIN_CHAT_ID,'text':text})
+
+async def notify_admin_photo(text, image_bytes):
+    if not BOT_TOKEN or not ADMIN_CHAT_ID: return
+    async with httpx.AsyncClient(timeout=30) as client:
+        await client.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto',
+            data={'chat_id':ADMIN_CHAT_ID,'caption':text},
+            files={'photo':('payment-proof.jpg',image_bytes,'image/jpeg')}
+        )
 
 @app.get('/api/health')
 def health(): return {'ok':True,'service':'Sora Flowers'}
@@ -127,7 +137,19 @@ async def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str = 
 async def create_order(order:Order, x_telegram_init_data:str=Header(default='')):
     user=verify_init_data(x_telegram_init_data)
     if not user: raise HTTPException(401,'Telegram foydalanuvchisi tasdiqlanmadi. Mini App ichidan qayta kiring.')
-    if order.payment_method!='cash': raise HTTPException(400,'Hozircha faqat yetkazilganda naqd toʻlov ishlaydi.')
+    if order.payment_method not in ('cash','click','payme'):
+        raise HTTPException(400,'Toʻlov usuli notoʻgʻri.')
+    proof_bytes=None
+    if order.payment_method in ('click','payme'):
+        if not order.proof_image.startswith('data:image/'):
+            raise HTTPException(400,'Toʻlov skrinshotini yuklang.')
+        try:
+            encoded=order.proof_image.split(',',1)[1]
+            proof_bytes=base64.b64decode(encoded,validate=True)
+        except Exception:
+            raise HTTPException(400,'Skrinshot fayli notoʻgʻri.')
+        if len(proof_bytes)>8*1024*1024:
+            raise HTTPException(413,'Skrinshot 8 MB dan kichik boʻlishi kerak.')
     catalog=json.loads((BASE/'catalog.json').read_text('utf-8'))
     by_name={p.get('name'):int(p.get('price') or 0) for p in catalog.get('items',[])}
     calc=0
@@ -141,12 +163,18 @@ async def create_order(order:Order, x_telegram_init_data:str=Header(default=''))
     if calc!=order.total: raise HTTPException(400,'Buyurtma summasi mos kelmadi. Sahifani yangilang.')
     with sqlite3.connect(DB) as c:
         cur=c.execute('INSERT INTO orders(telegram_user_id,customer_name,phone,address,delivery_time,payment_method,items_json,total) VALUES(?,?,?,?,?,?,?,?)',
-            (str(user.get('id','')),order.customer.name,order.customer.phone,order.customer.address,order.customer.delivery_time,'cash',json.dumps(safe_items,ensure_ascii=False),calc))
+            (str(user.get('id','')),order.customer.name,order.customer.phone,order.customer.address,order.customer.delivery_time,order.payment_method,json.dumps(safe_items,ensure_ascii=False),calc))
         oid=cur.lastrowid
     msg=(f'🌿 SORA FLOWERS — YANGI BUYURTMA №{oid}\n\n'+ '\n'.join(f"• {x['name']} × {x['qty']} — {x['price']*x['qty']:,} soʻm" for x in safe_items)+
-         f"\n\nJami: {calc:,} soʻm\nToʻlov: Yetkazilganda naqd\n\nIsm: {order.customer.name}\nTelefon: {order.customer.phone}\nManzil: {order.customer.address}\nYetkazish: {order.customer.delivery_time or 'Kelishiladi'}\nTelegram ID: {user.get('id','')} ")
-    try: await notify_admin(msg)
-    except Exception: pass
+         f"\n\nJami: {calc:,} soʻm\nToʻlov: {order.payment_method.upper()}"+(" — chek tekshirilsin" if proof_bytes else " — yetkazilganda naqd")+
+         f"\n\nIsm: {order.customer.name}\nTelefon: {order.customer.phone}\nManzil: {order.customer.address}\nYetkazish: {order.customer.delivery_time or 'Kelishiladi'}\nTelegram ID: {user.get('id','')} ")
+    try:
+        if proof_bytes:
+            await notify_admin_photo(msg,proof_bytes)
+        else:
+            await notify_admin(msg)
+    except Exception as exc:
+        print('Admin xabari yuborilmadi:',str(exc))
     return {'ok':True,'order_id':oid,'message':'Buyurtma qabul qilindi'}
 
 @app.get('/api/my-orders')
