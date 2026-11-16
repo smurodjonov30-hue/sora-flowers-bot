@@ -2,6 +2,7 @@ import os, json, hmac, hashlib, time, sqlite3, base64
 from urllib.parse import parse_qsl
 from pathlib import Path
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -16,6 +17,17 @@ WEBAPP_URL=os.getenv('WEBAPP_URL','')
 WEBHOOK_SECRET=os.getenv('WEBHOOK_SECRET','')
 DB=BASE/'orders.sqlite3'
 app=FastAPI(title='Sora Flowers Mini App')
+# Mini App Netlify frontend calls the Render API from a different origin.
+# Without CORS middleware, Safari/Telegram WebView blocks order POST preflight.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[WEBAPP_URL.rstrip('/'), 'https://sora-flower.netlify.app'],
+    allow_origin_regex=r'https://[a-zA-Z0-9-]+\.netlify\.app',
+    allow_credentials=False,
+    allow_methods=['GET', 'POST', 'OPTIONS'],
+    allow_headers=['*'],
+    max_age=86400,
+)
 
 class Customer(BaseModel):
     name:str=Field(min_length=2,max_length=100)
@@ -60,11 +72,15 @@ async def notify_admin(text):
 async def notify_admin_photo(text, image_bytes):
     if not BOT_TOKEN or not ADMIN_CHAT_ID: return
     async with httpx.AsyncClient(timeout=30) as client:
-        await client.post(
+        response = await client.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto',
             data={'chat_id':ADMIN_CHAT_ID,'caption':text},
             files={'photo':('payment-proof.jpg',image_bytes,'image/jpeg')}
         )
+        response.raise_for_status()
+        result = response.json()
+        if not result.get('ok'):
+            raise RuntimeError(result.get('description', 'Telegram sendPhoto xatosi'))
 
 @app.get('/api/health')
 def health(): return {'ok':True,'service':'Sora Flowers'}
@@ -182,6 +198,10 @@ async def create_order(order:Order, x_telegram_init_data:str=Header(default=''))
             await notify_admin(msg)
     except Exception as exc:
         print('Admin xabari yuborilmadi:',str(exc))
+        try:
+            await notify_admin(msg + '\n\nDIQQAT: chek rasmi Telegramga yuborilmadi; server logini tekshiring.')
+        except Exception as fallback_exc:
+            print('Admin uchun zaxira xabar ham yuborilmadi:', str(fallback_exc))
     return {'ok':True,'order_id':oid,'message':'Buyurtma qabul qilindi'}
 
 @app.get('/api/my-orders')
