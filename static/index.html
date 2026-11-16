@@ -174,9 +174,9 @@ function checkout(){
  ks.forEach(i=>{const x=S.items[i];h+='<div class="ci"><div class="cim">'+IMG(x)+'</div><div class="cin"><b>'+esc(x.name)+'</b><span class="mu">'+fmt(x.price)+'</span></div><div class="qty"><button data-a="m" data-i="'+i+'">−</button><b>'+cart[i]+'</b><button data-a="p" data-i="'+i+'">+</button></div></div>'});
  h+='<div class="row"><span>Jami</span><b>'+fmt(total())+'</b></div><div style="height:10px"></div>';
  h+=[["n","Ismingiz","text"],["p","Telefon raqam","tel"],["a","Manzil (Toshkent)","text"],["t","Yetkazish vaqti (ixtiyoriy)","text"]].map(f=>'<input data-f="'+f[0]+'" placeholder="'+f[1]+'" type="'+f[2]+'" value="'+esc(F[f[0]])+'" '+(f[0]==="n"||f[0]==="p"||f[0]==="a"?'required':'')+'>').join("");
- h+='<label class="lb" style="display:block;margin:14px 0 7px">Toʻlov usuli</label><select data-f="pay" style="width:100%;padding:14px;border:1px solid var(--bd);border-radius:14px;background:var(--cd);color:var(--tx);font:inherit"><option value="cash"'+((F.pay||"cash")==="cash"?' selected':'')+'>Naqd pul — yetkazilganda</option><option value="click"'+(F.pay==="click"?' selected':'')+'>Click orqali kartaga oʻtkazma</option><option value="payme"'+(F.pay==="payme"?' selected':'')+'>Payme orqali kartaga oʻtkazma</option></select>';
- if(F.pay==="click"||F.pay==="payme"){h+='<div class="info" style="margin-top:12px"><h3>Toʻlov maʼlumotlari</h3><p><b>Karta:</b> 9860 0201 1013 4457</p><p><b>Karta egasi:</b> Murodjonov Sardor</p><p class="mu">Buyurtma summasini kartaga oʻtkazing, soʻng chek yoki toʻlov skrinshotini yuklang.</p><label class="lb">Toʻlov skrinshoti</label><input type="file" accept="image/*" data-proof="1" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:12px"><p class="mu" style="font-size:12px">Rasm yuklash majburiy. Toʻlov admin tomonidan tekshiriladi.</p>'+(F.proof?'<p style="color:var(--ac)">Skrinshot tanlandi</p>':'')+'</div>'}
- return h+'<button class="pri big" data-a="send">Buyurtmani yuborish</button><p class="mu" style="font-size:13px;text-align:center">Onlayn oʻtkazmalar skrinshoti yuboriladi, toʻlov kelib tushgani admin tomonidan alohida tekshiriladi.</p></div>'+dock(n)}
+ h+='<label class="lb" style="display:block;margin:14px 0 7px">Toʻlov usuli</label><select data-f="pay" style="width:100%;padding:14px;border:1px solid var(--bd);border-radius:14px;background:var(--cd);color:var(--tx);font:inherit"><option value="cash" selected>Naqd pul — yetkazilganda</option></select>';
+ 
+ return h+'<button class="pri big" data-a="send">Buyurtmani yuborish</button><p class="mu" style="font-size:13px;text-align:center">Hozircha toʻlov buyurtma yetkazilganda naqd pul orqali amalga oshiriladi.</p></div>'+dock(n)}
 function render(){
  const y=scrollY,c=$(".car"),sl=c?c.scrollLeft:0;
  $("#app").innerHTML=(view==="co"?'':'<header><div class="top2"><div class="who"><b>'+ic('leaf')+'</b><div><strong>Sora Flowers</strong><a class="loc" href="https://www.google.com/maps?q=41.32667,69.235" target="_blank" rel="noopener">'+ic('pin')+esc(S.addr)+'</a></div></div></div><div class="hh"><h1>Oʻzingizga mos <i>jonli</i> gulni toping</h1><button class="rb" data-a="sr" aria-label="Qidirish">'+ic('search')+'</button></div></header>')+shop();
@@ -185,13 +185,12 @@ function shrink(file){return new Promise((ok,no)=>{const im=new Image(),u=URL.cr
 async function send(){
  if(!Object.keys(cart).length){toast("Savatcha boʻsh");return}
  if(!F.n||!F.p||!F.a){toast("Ism, telefon va manzilni toʻldiring");return}
- if((F.pay==="click"||F.pay==="payme")&&!F.proof){toast("Toʻlov skrinshotini yuklang");return}
  const digits=String(F.p).replace(/\D/g,"");if(digits.length<9||digits.length>15){toast("Telefon raqamni toʻgʻri kiriting");return}
  const lines=Object.keys(cart).map(i=>{const x=S.items[i];return x?{name:x.name,qty:cart[i],price:Number(x.price)||0}:null}).filter(Boolean);
- const order={customer:{name:F.n,phone:F.p,address:F.a,delivery_time:F.t||""},payment_method:F.pay||"cash",proof_image:F.proof||"",items:lines,total:total()};
+ const order={customer:{name:F.n,phone:F.p,address:F.a,delivery_time:F.t||""},payment_method:"cash",items:lines,total:total()};
  if(tgApp && tgApp.initData){
    try {
-     const resp=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tgApp.initData},body:JSON.stringify(order)});
+     const resp=await fetch('https://sora-flowers-bot.onrender.com/api/orders',{method:'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tgApp.initData},body:JSON.stringify(order)});
      const data=await resp.json();
      if(!resp.ok)throw new Error(data.detail||'Buyurtma yuborilmadi');
      cart={};persistCart();F={};view='';render();toast('Buyurtma qabul qilindi! №'+data.order_id);try{tgApp.HapticFeedback.notificationOccurred('success')}catch(e){};return;
