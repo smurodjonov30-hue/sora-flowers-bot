@@ -60,15 +60,15 @@ async def notify_admin(text):
 def health(): return {'ok':True,'service':'Sora Flowers'}
 
 START_TEXT = (
-    "🌿 <b>SORA FLOWERS</b> ga xush kelibsiz!\\n\\n"
-    "Assalomu alaykum! 💚\\n\\n"
-    "Biz sizga uyingiz va ofisingiz uchun turli xil chiroyli xona gullarini taklif qilamiz.\\n\\n"
-    "🌱 Sifatli va saralangan gullar\\n"
-    "🎁 Sovg‘a uchun ajoyib tanlov\\n"
-    "🚚 Yetkazib berish xizmati mavjud\\n\\n"
-    "📍 <b>Manzil:</b> Toshkent shahri, Chorsu bozori\\n\\n"
-    "📞 <b>Aloqa:</b> <a href=\"tel:+998946282004\">+998 94 628 20 04</a>\\n\\n"
-    "🛍 Katalogimizni ko‘ring, o‘zingizga yoqqan gulni tanlang va buyurtma bering!\\n\\n"
+    "🌿 <b>SORA FLOWERS</b> ga xush kelibsiz!\n\n"
+    "Assalomu alaykum! 💚\n\n"
+    "Biz sizga uyingiz va ofisingiz uchun turli xil chiroyli xona gullarini taklif qilamiz.\n\n"
+    "🌱 Sifatli va saralangan gullar\n"
+    "🎁 Sovg‘a uchun ajoyib tanlov\n"
+    "🚚 Yetkazib berish xizmati mavjud\n\n"
+    "📍 <b>Manzil:</b> Toshkent shahri, Chorsu bozori\n\n"
+    "📞 <b>Aloqa:</b> <a href=\"tel:+998946282004\">+998 94 628 20 04</a>\n\n"
+    "🛍 Katalogimizni ko‘ring, o‘zingizga yoqqan gulni tanlang va buyurtma bering!\n\n"
     "<b>SORA FLOWERS — Tabiat go‘zalligi sizning uyingizda!</b>"
 )
 
