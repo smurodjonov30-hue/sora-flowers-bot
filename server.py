@@ -59,16 +59,18 @@ async def notify_admin(text):
 @app.get('/api/health')
 def health(): return {'ok':True,'service':'Sora Flowers'}
 
-START_TEXT = ("🌿 SORA FLOWERS ga xush kelibsiz!\n\n"
-    "Assalomu alaykum! 💚\n\n"
-    "Biz sizga uyingiz va ofisingiz uchun turli xil chiroyli xona gullarini taklif qilamiz.\n\n"
-    "🌱 Sifatli va saralangan gullar\n"
-    "🎁 Sovg‘a uchun ajoyib tanlov\n"
-    "🚚 Yetkazib berish xizmati mavjud\n\n"
-    "📍 Manzil: Toshkent shahri, Chorsu bozori\n"
-    "📞 Aloqa: +998 94 628 20 04\n\n"
-    "🛍 Katalogimizni ko‘ring, o‘zingizga yoqqan gulni tanlang va buyurtma bering!\n\n"
-    "SORA FLOWERS — Tabiat go‘zalligi sizning uyingizda!")
+START_TEXT = (
+    "🌿 <b>SORA FLOWERS</b> ga xush kelibsiz!\\n\\n"
+    "Assalomu alaykum! 💚\\n\\n"
+    "Biz sizga uyingiz va ofisingiz uchun turli xil chiroyli xona gullarini taklif qilamiz.\\n\\n"
+    "🌱 Sifatli va saralangan gullar\\n"
+    "🎁 Sovg‘a uchun ajoyib tanlov\\n"
+    "🚚 Yetkazib berish xizmati mavjud\\n\\n"
+    "📍 <b>Manzil:</b> Toshkent shahri, Chorsu bozori\\n\\n"
+    "📞 <b>Aloqa:</b> +998 94 628 20 04\\n\\n"
+    "🛍 Katalogimizni ko‘ring, o‘zingizga yoqqan gulni tanlang va buyurtma bering!\\n\\n"
+    "<b>SORA FLOWERS — Tabiat go‘zalligi sizning uyingizda!</b>"
+)
 
 async def telegram_call(method, payload):
     if not BOT_TOKEN:
@@ -80,6 +82,32 @@ async def telegram_call(method, payload):
         if not data.get('ok'):
             raise RuntimeError(data.get('description','Telegram API xatosi'))
         return data.get('result')
+
+@app.on_event('startup')
+async def register_telegram_webhook():
+    # Render'dagi xizmat ishga tushganda Telegram webhook manzilini avtomatik sozlaydi.
+    if not BOT_TOKEN:
+        print('BOT_TOKEN sozlanmagan: Telegram webhook ulanmaydi')
+        return
+    base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sora-flowers-bot.onrender.com').rstrip('/')
+    payload = {'url': base_url + '/telegram/webhook'}
+    if WEBHOOK_SECRET:
+        payload['secret_token'] = WEBHOOK_SECRET
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                f'https://api.telegram.org/bot{BOT_TOKEN}/setWebhook',
+                json=payload
+            )
+            response.raise_for_status()
+            result = response.json()
+            if result.get('ok'):
+                print('Telegram webhook muvaffaqiyatli sozlandi:', payload['url'])
+            else:
+                print('Telegram webhook xatosi:', result.get('description', 'Noma’lum xato'))
+    except Exception as exc:
+        print('Telegram webhook sozlashda xato:', str(exc))
+
 
 @app.post('/telegram/webhook')
 async def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str = Header(default='')):
@@ -93,7 +121,7 @@ async def telegram_webhook(update: dict, x_telegram_bot_api_secret_token: str = 
         chat_id = message['chat']['id']
         keyboard = {'inline_keyboard': [[{'text':'🛍 Katalogni ko‘rish','web_app':{'url':WEBAPP_URL}}],
             [{'text':'📞 Biz bilan bog‘lanish','url':'https://wa.me/998946282004'}]]}
-        await telegram_call('sendMessage', {'chat_id':chat_id,'text':START_TEXT,'reply_markup':keyboard})
+        await telegram_call('sendMessage', {'chat_id':chat_id,'text':START_TEXT,'parse_mode':'HTML','reply_markup':keyboard})
     return {'ok': True}
 
 @app.post('/api/orders')
