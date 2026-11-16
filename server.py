@@ -115,6 +115,13 @@ async def register_telegram_webhook():
                 print('Telegram webhook muvaffaqiyatli sozlandi:', payload['url'])
             else:
                 print('Telegram webhook xatosi:', result.get('description', 'Noma’lum xato'))
+            if WEBAPP_URL:
+                menu_response = await client.post(
+                    f'https://api.telegram.org/bot{BOT_TOKEN}/setChatMenuButton',
+                    json={'menu_button': {'type': 'web_app', 'text': 'Open', 'web_app': {'url': WEBAPP_URL}}}
+                )
+                menu_response.raise_for_status()
+                print('Telegram Open menyusi bir xil Mini App manziliga sozlandi')
     except Exception as exc:
         print('Telegram webhook sozlashda xato:', str(exc))
 
