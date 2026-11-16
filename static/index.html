@@ -157,7 +157,7 @@ async function loadMyOrders(){
   const data=await r.json(); if(!r.ok)throw new Error(data.detail||'Yuklab boʻlmadi');
   if(!data.length){el.innerHTML='<p class="empty">Hozircha buyurtmalaringiz yoʻq.</p>';return}
   const labels={new:'Qabul qilindi',accepted:'Qabul qilindi',preparing:'Tayyorlanmoqda',delivering:'Yetkazilmoqda',delivered:'Yetkazildi',cancelled:'Bekor qilindi'};
-  el.innerHTML=data.map(o=>'<article class="info" style="margin:12px 0"><h3>Buyurtma №'+o.id+'</h3><p>'+esc(o.created_at||'')+'</p><p><b>Holati:</b> '+esc(labels[o.status]||o.status)+'</p><p>'+o.items.map(x=>esc(x.name)+' × '+x.qty+' — '+fmt(x.price*x.qty)+' soʻm').join('<br>')+'</p><p><b>Jami: '+fmt(o.total)+' soʻm</b></p></article>').join('');
+  el.innerHTML=data.map(o=>'<article class="info" style="margin:12px 0"><h3>Buyurtma №'+o.id+'</h3><p>'+esc(o.created_at||'')+'</p><p><b>Holati:</b> '+esc(labels[o.status]||o.status)+'</p><p>'+o.items.map(x=>esc(x.name)+' × '+x.qty+' — '+fmt(x.price*x.qty)).join('<br>')+'</p><p><b>Jami: '+fmt(o.total)+' soʻm</b></p></article>').join('');
  }catch(e){el.innerHTML='<p class="empty">Buyurtmalarni yuklashda xatolik: '+esc(e.message)+'</p>'}
 }
 function ordersPage(){
