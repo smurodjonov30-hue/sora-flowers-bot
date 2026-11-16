@@ -122,6 +122,16 @@ async def create_order(order:Order, x_telegram_init_data:str=Header(default=''))
     except Exception: pass
     return {'ok':True,'order_id':oid,'message':'Buyurtma qabul qilindi'}
 
+@app.get('/api/my-orders')
+def my_orders(x_telegram_init_data:str=Header(default='')):
+    user=verify_init_data(x_telegram_init_data)
+    if not user: raise HTTPException(401,'Telegram foydalanuvchisi tasdiqlanmadi. Mini App ichidan qayta kiring.')
+    uid=str(user.get('id',''))
+    with sqlite3.connect(DB) as c:
+        c.row_factory=sqlite3.Row
+        rows=c.execute('SELECT id, created_at, items_json, total, status FROM orders WHERE telegram_user_id=? ORDER BY id DESC LIMIT 100',(uid,)).fetchall()
+    return [{'id':r['id'],'created_at':r['created_at'],'items':json.loads(r['items_json'] or '[]'),'total':r['total'],'status':r['status']} for r in rows]
+
 @app.get('/api/admin/orders')
 def list_orders(x_admin_key:str=Header(default='')):
     key=os.getenv('ADMIN_API_KEY','')
