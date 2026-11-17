@@ -11,7 +11,8 @@ load_dotenv()
 
 BASE=Path(__file__).parent
 BOT_TOKEN=os.getenv('BOT_TOKEN','')
-ADMIN_CHAT_ID=os.getenv('ADMIN_CHAT_ID','')
+# Guruh ID default qiymati; Render Environment'dagi ADMIN_CHAT_ID uni almashtirishi mumkin.
+ADMIN_CHAT_ID=os.getenv('ADMIN_CHAT_ID','-5536490707')
 BOT_USERNAME=os.getenv('BOT_USERNAME','')
 WEBAPP_URL=os.getenv('WEBAPP_URL','')
 WEBHOOK_SECRET=os.getenv('WEBHOOK_SECRET','')
@@ -64,23 +65,40 @@ def verify_init_data(raw:str):
     try: return json.loads(pairs.get('user','{}'))
     except Exception: return None
 
+async def _check_telegram_response(response):
+    response.raise_for_status()
+    try:
+        result = response.json()
+    except ValueError as exc:
+        raise RuntimeError('Telegram notoʻgʻri javob qaytardi') from exc
+    if not result.get('ok'):
+        raise RuntimeError(result.get('description', 'Telegram API xatosi'))
+    return result.get('result')
+
 async def notify_admin(text):
-    if not BOT_TOKEN or not ADMIN_CHAT_ID: return
+    if not BOT_TOKEN:
+        raise RuntimeError('BOT_TOKEN Render Environment’da sozlanmagan')
+    if not ADMIN_CHAT_ID:
+        raise RuntimeError('ADMIN_CHAT_ID sozlanmagan')
     async with httpx.AsyncClient(timeout=20) as client:
-        await client.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',json={'chat_id':ADMIN_CHAT_ID,'text':text})
+        response = await client.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
+            json={'chat_id':ADMIN_CHAT_ID,'text':text}
+        )
+        return await _check_telegram_response(response)
 
 async def notify_admin_photo(text, image_bytes):
-    if not BOT_TOKEN or not ADMIN_CHAT_ID: return
+    if not BOT_TOKEN:
+        raise RuntimeError('BOT_TOKEN Render Environment’da sozlanmagan')
+    if not ADMIN_CHAT_ID:
+        raise RuntimeError('ADMIN_CHAT_ID sozlanmagan')
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.post(
             f'https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto',
             data={'chat_id':ADMIN_CHAT_ID,'caption':text},
             files={'photo':('payment-proof.jpg',image_bytes,'image/jpeg')}
         )
-        response.raise_for_status()
-        result = response.json()
-        if not result.get('ok'):
-            raise RuntimeError(result.get('description', 'Telegram sendPhoto xatosi'))
+        return await _check_telegram_response(response)
 
 @app.get('/api/health')
 def health(): return {'ok':True,'service':'Sora Flowers'}
@@ -184,25 +202,32 @@ async def create_order(order:Order, x_telegram_init_data:str=Header(default=''))
         calc+=price*it.qty
         safe_items.append({'name':it.name,'qty':it.qty,'price':price})
     if calc!=order.total: raise HTTPException(400,'Buyurtma summasi mos kelmadi. Sahifani yangilang.')
+    # Avval buyurtmani pending holatda saqlaymiz. Telegram tasdigʻisiz frontendga
+    # muvaffaqiyat javobi qaytarilmaydi.
     with sqlite3.connect(DB) as c:
-        cur=c.execute('INSERT INTO orders(telegram_user_id,customer_name,phone,address,delivery_time,payment_method,items_json,total) VALUES(?,?,?,?,?,?,?,?)',
-            (str(user.get('id','')),order.customer.name,order.customer.phone,order.customer.address,order.customer.delivery_time,order.payment_method,json.dumps(safe_items,ensure_ascii=False),calc))
+        cur=c.execute('INSERT INTO orders(telegram_user_id,customer_name,phone,address,delivery_time,payment_method,items_json,total,status) VALUES(?,?,?,?,?,?,?,?,?)',
+            (str(user.get('id','')),order.customer.name,order.customer.phone,order.customer.address,order.customer.delivery_time,order.payment_method,json.dumps(safe_items,ensure_ascii=False),calc,'telegram_pending'))
         oid=cur.lastrowid
     msg=(f'🌿 SORA FLOWERS — YANGI BUYURTMA №{oid}\n\n'+ '\n'.join(f"• {x['name']} × {x['qty']} — {x['price']*x['qty']:,} soʻm" for x in safe_items)+
          f"\n\nJami: {calc:,} soʻm\nToʻlov: {order.payment_method.upper()}"+(" — chek tekshirilsin" if proof_bytes else " — yetkazilganda naqd")+
          f"\n\nIsm: {order.customer.name}\nTelefon: {order.customer.phone}\nManzil: {order.customer.address}\nYetkazish: {order.customer.delivery_time or 'Kelishiladi'}\nTelegram ID: {user.get('id','')} ")
     try:
         if proof_bytes:
+            # Chek bilan buyurtmada rasm va izoh birga yuborilishi shart.
             await notify_admin_photo(msg,proof_bytes)
         else:
             await notify_admin(msg)
     except Exception as exc:
-        print('Admin xabari yuborilmadi:',str(exc))
-        try:
-            await notify_admin(msg + '\n\nDIQQAT: chek rasmi Telegramga yuborilmadi; server logini tekshiring.')
-        except Exception as fallback_exc:
-            print('Admin uchun zaxira xabar ham yuborilmadi:', str(fallback_exc))
-    return {'ok':True,'order_id':oid,'message':'Buyurtma qabul qilindi'}
+        print(f'Buyurtma №{oid}: Telegram guruhiga yuborilmadi:',repr(exc))
+        with sqlite3.connect(DB) as c:
+            c.execute("UPDATE orders SET status='telegram_failed' WHERE id=?",(oid,))
+        raise HTTPException(
+            status_code=502,
+            detail=f'Buyurtma guruhga yuborilmadi. Buyurtma №{oid}. Telegram xatosi: {str(exc)[:300]}'
+        )
+    with sqlite3.connect(DB) as c:
+        c.execute("UPDATE orders SET status='notified' WHERE id=?",(oid,))
+    return {'ok':True,'order_id':oid,'message':'Buyurtma Telegram guruhiga yuborildi'}
 
 @app.get('/api/my-orders')
 def my_orders(x_telegram_init_data:str=Header(default='')):
